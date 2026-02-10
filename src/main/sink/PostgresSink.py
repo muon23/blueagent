@@ -1,3 +1,4 @@
+import json
 import time
 from typing import List, Iterable, Tuple, Any
 
@@ -114,7 +115,7 @@ class PostgresSink(Sink):
                     e.reply_root_uri,
                     e.langs,
                     e.tags,
-                    e.embed,
+                    json.dumps(e.embed, ensure_ascii=False) if e.embed is not None else None,
                 )
             )
 
