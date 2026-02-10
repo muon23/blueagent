@@ -9,7 +9,7 @@
 2. **Ingestion → Postgres**
   - Ingest posts into `posts`.
     - ToDo: Main program 
-3. **Batch indexer**
+3. **Batch indexers**
   - Periodically pull recent posts (e.g., last 2–3 days) and compute embeddings.
   - Upsert into `post_embeddings`.
 

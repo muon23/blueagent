@@ -10,11 +10,11 @@ import asyncpg
 
 from event.Event import Event
 from event import PostUpsert, PostDelete
-from sink.MultiSink import MultiSink
-from sink.NullSink import NullSink
-from sink.PostgresSink import PostgresSink
-from sink.Sink import Sink
-from sink.StdoutSink import StdoutSink
+from sinks.MultiSink import MultiSink
+from sinks.NullSink import NullSink
+from sinks.PostgresSink import PostgresSink
+from sinks.Sink import Sink
+from sinks.StdoutSink import StdoutSink
 
 
 class RecordingSink(Sink):

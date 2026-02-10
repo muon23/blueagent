@@ -29,10 +29,10 @@ DEFAULT_LANGS_CSV = ",".join(DEFAULT_LANGS)
 # Adds anychat/src/main to sys.path for llms imports outside IntelliJ.
 import bootstrap  # noqa: F401
 
-from ingestor.PostIngestor import PostIngestor
-from ingestor.StreamClient import StreamClient
+from ingestors.PostIngestor import PostIngestor
+from ingestors.StreamClient import StreamClient
 from event.PostEventFilters import PostLanguageFilter
-from sink.PostgresSink import PostgresSink
+from sinks.PostgresSink import PostgresSink
 
 
 def parse_args() -> argparse.Namespace:

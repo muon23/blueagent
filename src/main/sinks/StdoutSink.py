@@ -6,7 +6,7 @@ from typing import Iterable, Any
 
 from event.Event import Event
 from event import PostUpsert, PostDelete
-from sink.Sink import Sink
+from sinks.Sink import Sink
 
 
 class StdoutSink(Sink):

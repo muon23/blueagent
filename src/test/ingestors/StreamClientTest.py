@@ -6,9 +6,9 @@ import unittest
 import urllib.parse
 
 from event.Event import Event
-from ingestor.Ingestor import Ingestor
-from ingestor.StreamClient import StreamClient
-from sink.Sink import Sink
+from ingestors.Ingestor import Ingestor
+from ingestors.StreamClient import StreamClient
+from sinks.Sink import Sink
 
 
 class RecordingIngestor(Ingestor):

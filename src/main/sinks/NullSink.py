@@ -1,5 +1,5 @@
 from event.Event import Event
-from sink.Sink import Sink
+from sinks.Sink import Sink
 
 
 class NullSink(Sink):

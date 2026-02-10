@@ -2,7 +2,7 @@ import sys
 from typing import Sequence, Iterable
 
 from event.Event import Event
-from sink.Sink import Sink
+from sinks.Sink import Sink
 
 
 class MultiSink(Sink):

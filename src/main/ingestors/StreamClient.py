@@ -11,8 +11,8 @@ import certifi
 import websockets
 
 from event.Event import Event
-from sink.NullSink import NullSink
-from sink.Sink import Sink
+from sinks.NullSink import NullSink
+from sinks.Sink import Sink
 from .Ingestor import Ingestor
 
 

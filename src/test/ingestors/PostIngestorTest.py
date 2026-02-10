@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 from event.Event import EventFilter
 from event import PostUpsert, PostDelete
-from ingestor.PostIngestor import PostIngestor
+from ingestors.PostIngestor import PostIngestor
 
 
 class DropAllFilter(EventFilter):
