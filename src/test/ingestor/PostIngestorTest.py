@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime, timezone
 
 from event.Event import EventFilter
-from event.PostEvents import PostUpsert, PostDelete
+from event import PostUpsert, PostDelete
 from ingestor.PostIngestor import PostIngestor
 
 
@@ -27,6 +27,23 @@ class PostIngestorTest(unittest.IsolatedAsyncioTestCase):
                     "text": "hello world",
                     "createdAt": "2025-01-01T00:00:00Z",
                     "langs": ["en"],
+                    "facets": [
+                        {
+                            "features": [
+                                {"$type": "app.bsky.richtext.facet#tag", "tag": "ai"},
+                                {"$type": "app.bsky.richtext.facet#tag", "tag": "news"},
+                            ]
+                        }
+                    ],
+                    "embed": {
+                        "$type": "app.bsky.embed.external",
+                        "external": {
+                            "uri": "https://example.com",
+                            "title": "Example",
+                            "description": "Example desc",
+                            "thumb": "thumb",
+                        },
+                    },
                     "reply": {
                         "parent": {"uri": "at://did/app.bsky.feed.post/p1", "cid": "c1"},
                         "root": {"uri": "at://did/app.bsky.feed.post/r1", "cid": "c2"},
@@ -47,6 +64,17 @@ class PostIngestorTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("at://did/app.bsky.feed.post/p1", upsert.reply_parent_uri)
         self.assertEqual("at://did/app.bsky.feed.post/r1", upsert.reply_root_uri)
         self.assertEqual(["en"], upsert.langs)
+        self.assertEqual(["ai", "news"], upsert.tags)
+        self.assertEqual(
+            {
+                "type": "app.bsky.embed.external",
+                "uri": "https://example.com",
+                "title": "Example",
+                "description": "Example desc",
+                "has_thumb": True,
+            },
+            upsert.embed,
+        )
         self.assertEqual("123", upsert.cursor)
 
     async def test_delete_post_event(self):

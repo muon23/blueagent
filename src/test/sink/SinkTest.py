@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 import asyncpg
 
 from event.Event import Event
-from event.PostEvents import PostUpsert, PostDelete
+from event import PostUpsert, PostDelete
 from sink.MultiSink import MultiSink
 from sink.NullSink import NullSink
 from sink.PostgresSink import PostgresSink
@@ -111,6 +111,8 @@ class SinkTest(unittest.IsolatedAsyncioTestCase):
                 did="did:plc:xyz",
                 created_at=created_at,
                 text="hello world",
+                tags=["ai", "news"],
+                embed={"type": "app.bsky.embed.external", "uri": "https://example.com"},
                 cursor="111",
             )
             await sink.write([upsert])
@@ -129,6 +131,8 @@ class SinkTest(unittest.IsolatedAsyncioTestCase):
                     did=upsert.did,
                     created_at=created_at,
                     text="updated",
+                    tags=["ai"],
+                    embed={"type": "app.bsky.embed.images", "image_count": 1},
                     cursor="222",
                 )
                 await sink.write([upsert2])

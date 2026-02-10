@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Iterable, Any
 
 from event.Event import Event
-from event.PostEvents import PostUpsert, PostDelete
+from event import PostUpsert, PostDelete
 from sink.Sink import Sink
 
 

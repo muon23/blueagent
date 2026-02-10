@@ -2,7 +2,7 @@ import time
 from typing import List, Iterable, Tuple, Any
 
 from event.Event import Event
-from event.PostEvents import PostUpsert, PostDelete
+from event import PostUpsert, PostDelete
 from sink.Sink import Sink
 
 
@@ -113,14 +113,16 @@ class PostgresSink(Sink):
                     e.reply_parent_uri,
                     e.reply_root_uri,
                     e.langs,
+                    e.tags,
+                    e.embed,
                 )
             )
 
         sql = """
         INSERT INTO posts (
-          uri, cid, did, created_at, text, reply_parent_uri, reply_root_uri, langs
+          uri, cid, did, created_at, text, reply_parent_uri, reply_root_uri, langs, tags, embed
         )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
         ON CONFLICT (uri) DO UPDATE
         SET
           cid = EXCLUDED.cid,
@@ -130,6 +132,8 @@ class PostgresSink(Sink):
           reply_parent_uri = EXCLUDED.reply_parent_uri,
           reply_root_uri = EXCLUDED.reply_root_uri,
           langs = EXCLUDED.langs,
+          tags = EXCLUDED.tags,
+          embed = EXCLUDED.embed,
           updated_at = NOW()
         WHERE posts.cid IS DISTINCT FROM EXCLUDED.cid;
         """
@@ -162,6 +166,8 @@ class PostgresSink(Sink):
       reply_parent_uri TEXT NULL,
       reply_root_uri TEXT NULL,
       langs TEXT[] NULL,
+      tags TEXT[] NULL,
+      embed JSONB NULL,
       inserted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );

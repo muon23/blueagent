@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from .Event import Event, EventFilter
-from .PostEvents import PostUpsert
+from .PostUpsert import PostUpsert
 
 
 @dataclass
