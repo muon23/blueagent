@@ -1,7 +1,8 @@
 import json
 import sys
 from dataclasses import asdict
-from typing import Iterable
+from datetime import datetime, timezone
+from typing import Iterable, Any
 
 from event.Event import Event
 from event.PostEvents import PostUpsert, PostDelete
@@ -22,7 +23,7 @@ class StdoutSink(Sink):
         self.on(PostDelete, self._handle_post_delete)
 
     async def _handle_post_upsert(self, e: PostUpsert) -> None:
-        d = asdict(e)
+        d = self._serialize(asdict(e))
         if not self._include_raw:
             d.pop("raw", None)
         self._stream.write(json.dumps({"type": "PostUpsert", **d}, ensure_ascii=False) + "\n")
@@ -39,6 +40,19 @@ class StdoutSink(Sink):
             if h is not None:
                 await h(ev)
             else:
-                self._stream.write(json.dumps({"type": type(ev).__name__, **asdict(ev)}) + "\n")
+                self._stream.write(json.dumps({"type": type(ev).__name__, **self._serialize(asdict(ev))}) + "\n")
                 self._stream.flush()
 
+    @staticmethod
+    def _serialize(value: Any) -> Any:
+        if isinstance(value, datetime):
+            if value.tzinfo is None:
+                return value.isoformat()
+            if value.tzinfo == timezone.utc:
+                return value.isoformat().replace("+00:00", "Z")
+            return value.isoformat()
+        if isinstance(value, list):
+            return [StdoutSink._serialize(v) for v in value]
+        if isinstance(value, dict):
+            return {k: StdoutSink._serialize(v) for k, v in value.items()}
+        return value
