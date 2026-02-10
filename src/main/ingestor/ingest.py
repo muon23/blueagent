@@ -16,15 +16,22 @@ def _setup_paths() -> Path:
 
 
 PROJECT_ROOT = _setup_paths()
+
 DEFAULT_N_MINUTES = 0.1
 DEFAULT_POSTGRES_DSN = "postgresql://localhost/postgres"
 DEFAULT_JETSTREAM_CURSOR_FILE = str(PROJECT_ROOT / "data" / "jetstream_cursor.txt")
+DEFAULT_BATCH_SIZE = 500
+DEFAULT_FLUSH_INTERVAL_S = 1.0
+DEFAULT_SINK_FLUSH_INTERVAL_S = 1.0
+DEFAULT_LANGS = ["en"]
+DEFAULT_LANGS_CSV = ",".join(DEFAULT_LANGS)
 
 # Adds anychat/src/main to sys.path for llms imports outside IntelliJ.
 import bootstrap  # noqa: F401
 
 from ingestor.PostIngestor import PostIngestor
 from ingestor.StreamClient import StreamClient
+from event.PostEventFilters import PostLanguageFilter
 from sink.PostgresSink import PostgresSink
 
 
@@ -34,7 +41,7 @@ def parse_args() -> argparse.Namespace:
         "--minutes",
         type=float,
         default=DEFAULT_N_MINUTES,
-        help=F"How many minutes to run ingestion (default: {DEFAULT_N_MINUTES}).",
+        help=f"How many minutes to run ingestion (default: {DEFAULT_N_MINUTES}).",
     )
     parser.add_argument(
         "--dsn",
@@ -49,20 +56,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=500,
-        help="PostgresSink batch size (default: 500).",
+        default=DEFAULT_BATCH_SIZE,
+        help=f"PostgresSink batch size (default: {DEFAULT_BATCH_SIZE}).",
     )
     parser.add_argument(
         "--flush-interval-s",
         type=float,
-        default=1.0,
-        help="PostgresSink flush interval in seconds (default: 1.0).",
+        default=DEFAULT_FLUSH_INTERVAL_S,
+        help=f"PostgresSink flush interval in seconds (default: {DEFAULT_FLUSH_INTERVAL_S}).",
     )
     parser.add_argument(
         "--sink-flush-interval-s",
         type=float,
-        default=1.0,
-        help="StreamClient sink flush interval in seconds (default: 1.0).",
+        default=DEFAULT_SINK_FLUSH_INTERVAL_S,
+        help=f"StreamClient sink flush interval in seconds (default: {DEFAULT_SINK_FLUSH_INTERVAL_S}).",
+    )
+    parser.add_argument(
+        "--langs",
+        default=DEFAULT_LANGS_CSV,
+        help=f"Comma-separated language filters (default: {DEFAULT_LANGS_CSV}).",
     )
     parser.add_argument(
         "--no-create-schema",
@@ -76,6 +88,10 @@ async def run_ingestion(args: argparse.Namespace) -> None:
     cursor_path = Path(args.cursor_file)
     cursor_path.parent.mkdir(parents=True, exist_ok=True)
 
+    langs = [lang.strip().lower() for lang in args.langs.split(",") if lang.strip()]
+    if not langs:
+        langs = DEFAULT_LANGS
+
     sink = PostgresSink(
         dsn=args.dsn,
         batch_size=args.batch_size,
@@ -83,13 +99,14 @@ async def run_ingestion(args: argparse.Namespace) -> None:
         create_schema=not args.no_create_schema,
     )
     client = StreamClient(
-        [PostIngestor()],
+        [PostIngestor(filters=[PostLanguageFilter(langs=langs)])],
         sink=sink,
         cursor_file=str(cursor_path),
         sink_flush_interval_s=args.sink_flush_interval_s,
     )
 
     print(f"Starting ingestion for {args.minutes} minute(s).")
+    print(f"Language filter: {langs}")
     print(f"Cursor file: {cursor_path}")
     print("Press Ctrl+C to stop early.")
 
