@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Dict, Any, List, Optional
 
 from event.Event import Event
@@ -36,7 +37,7 @@ class PostIngestor(Ingestor):
         uri = f"at://{did}/app.bsky.feed.post/{rkey}"
 
         if operation == "delete":
-            return [PostDelete(uri=uri, cursor=cursor)]
+            return self._apply_filters([PostDelete(uri=uri, cursor=cursor)])
 
         if operation not in ("create", "update"):
             return []
@@ -48,7 +49,9 @@ class PostIngestor(Ingestor):
             return []
 
         text = record.get("text") or ""
-        created_at = record.get("createdAt") or ""
+        created_at = self._parse_created_at(record.get("createdAt"))
+        if created_at is None:
+            return []
 
         # Replies: record["reply"] has {"root": {"uri","cid"}, "parent": {"uri","cid"}}
         reply = record.get("reply") or {}
@@ -59,13 +62,14 @@ class PostIngestor(Ingestor):
         reply_root_uri: Optional[str] = root.get("uri")
 
         # Optional language(s). Posts may include "langs": ["en", ...]
-        lang: Optional[str] = None
-        langs = record.get("langs")
-        if isinstance(langs, list) and langs:
-            if isinstance(langs[0], str):
-                lang = langs[0]
+        langs: Optional[List[str]] = None
+        record_langs = record.get("langs")
+        if isinstance(record_langs, list):
+            cleaned = [l for l in record_langs if isinstance(l, str)]
+            if cleaned:
+                langs = cleaned
 
-        return [
+        return self._apply_filters([
             PostUpsert(
                 uri=uri,
                 cid=str(cid),
@@ -74,11 +78,23 @@ class PostIngestor(Ingestor):
                 text=text,
                 reply_parent_uri=reply_parent_uri,
                 reply_root_uri=reply_root_uri,
-                lang=lang,
+                langs=langs,
                 cursor=cursor,
                 raw=None,  # or store record/commit if you want debug provenance
             )
-        ]
+        ])
 
     def wanted_collections(self) -> List[str]:
         return ["app.bsky.feed.post"]
+
+    @staticmethod
+    def _parse_created_at(value: Any) -> Optional[datetime]:
+        if not value or not isinstance(value, str):
+            return None
+        try:
+            if value.endswith("Z"):
+                value = value[:-1] + "+00:00"
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+

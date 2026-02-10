@@ -38,7 +38,7 @@ class StreamClient:
         self.instances = list(instances) if instances is not None else JETSTREAM_INSTANCES
         self.rewind_seconds = rewind_seconds
         self.cursor_file = cursor_file or os.path.join(
-            os.path.dirname(__file__),
+            os.getcwd(),
             "jetstream_cursor.txt",
         )
         self.ssl_context = ssl.create_default_context(cafile=certifi.where())

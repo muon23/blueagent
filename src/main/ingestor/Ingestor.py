@@ -1,14 +1,22 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any
+from dataclasses import dataclass
+
+from typing import List, Dict, Any, Optional
+from event.Event import EventFilter
+
+from event.Event import Event
 
 
+@dataclass
 class Ingestor(ABC):
+    filters: Optional[List[EventFilter]] = None
+
     @abstractmethod
     def wanted_collections(self) -> List[str]:
         pass
 
     @abstractmethod
-    async def handle_event(self, evt: Dict[str, Any]) -> None:
+    async def handle_event(self, evt: Dict[str, Any]) -> List[Event]:
         """
         evt is a Jetstream event dict (already JSON-decoded).
         """
@@ -17,3 +25,11 @@ class Ingestor(ABC):
     async def flush(self) -> None:
         """Optional: periodic batch flush to DB / queue."""
         return
+
+    def _apply_filters(self, events: List[Any]) -> List[Any]:
+        if not self.filters:
+            return events
+        filtered = events
+        for f in self.filters:
+            filtered = f.apply(filtered)
+        return filtered

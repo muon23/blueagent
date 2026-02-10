@@ -53,7 +53,7 @@ class PostgresSink(Sink):
 
         if self._create_schema:
             async with self._pool.acquire() as conn:
-                await conn.execute(self._SCHEMA_SQL)
+                await conn.execute(self._POST_SCHEMA_SQL)
 
     async def _enqueue_post_upsert(self, e: PostUpsert) -> None:
         self._pending_upserts.append(e)
@@ -112,13 +112,13 @@ class PostgresSink(Sink):
                     e.text,
                     e.reply_parent_uri,
                     e.reply_root_uri,
-                    e.lang,
+                    e.langs,
                 )
             )
 
         sql = """
         INSERT INTO posts (
-          uri, cid, did, created_at, text, reply_parent_uri, reply_root_uri, lang
+          uri, cid, did, created_at, text, reply_parent_uri, reply_root_uri, langs
         )
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
         ON CONFLICT (uri) DO UPDATE
@@ -129,7 +129,7 @@ class PostgresSink(Sink):
           text = EXCLUDED.text,
           reply_parent_uri = EXCLUDED.reply_parent_uri,
           reply_root_uri = EXCLUDED.reply_root_uri,
-          lang = EXCLUDED.lang,
+          langs = EXCLUDED.langs,
           updated_at = NOW()
         WHERE posts.cid IS DISTINCT FROM EXCLUDED.cid;
         """
@@ -152,7 +152,7 @@ class PostgresSink(Sink):
         async with self._pool.acquire() as conn:
             await conn.executemany(sql, uris)
 
-    _SCHEMA_SQL = """
+    _POST_SCHEMA_SQL = """
     CREATE TABLE IF NOT EXISTS posts (
       uri TEXT PRIMARY KEY,
       cid TEXT NOT NULL,
@@ -161,7 +161,7 @@ class PostgresSink(Sink):
       text TEXT NOT NULL,
       reply_parent_uri TEXT NULL,
       reply_root_uri TEXT NULL,
-      lang TEXT NULL,
+      langs TEXT[] NULL,
       inserted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );

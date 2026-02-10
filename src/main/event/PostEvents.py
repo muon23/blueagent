@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, Any
+from typing import Optional, Any, List
 
 from .Event import Event
 
@@ -14,7 +14,7 @@ class PostUpsert(Event):
     text: str = ""
     reply_parent_uri: Optional[str] = None
     reply_root_uri: Optional[str] = None
-    lang: Optional[str] = None
+    langs: Optional[List[str]] = None
     # optional extra metadata
     raw: Optional[dict[str, Any]] = None
 
