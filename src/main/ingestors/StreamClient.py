@@ -10,7 +10,7 @@ from typing import Iterable, List, Dict, Any, Optional
 import certifi
 import websockets
 
-from event.Event import Event
+from events.Event import Event
 from sinks.NullSink import NullSink
 from sinks.Sink import Sink
 from .Ingestor import Ingestor

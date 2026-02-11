@@ -2,8 +2,8 @@ import json
 import time
 from typing import List, Iterable, Tuple, Any
 
-from event.Event import Event
-from event import PostUpsert, PostDelete
+from events.Event import Event
+from events import PostUpsert, PostDelete
 from sinks.Sink import Sink
 
 

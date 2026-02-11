@@ -2,9 +2,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from typing import List, Dict, Any, Optional
-from event.Event import EventFilter
+from events.Event import EventFilter
 
-from event.Event import Event
+from events.Event import Event
 
 
 @dataclass

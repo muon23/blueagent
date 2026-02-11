@@ -8,8 +8,8 @@ from datetime import datetime, timezone
 
 import asyncpg
 
-from event.Event import Event
-from event import PostUpsert, PostDelete
+from events.Event import Event
+from events import PostUpsert, PostDelete
 from sinks.MultiSink import MultiSink
 from sinks.NullSink import NullSink
 from sinks.PostgresSink import PostgresSink

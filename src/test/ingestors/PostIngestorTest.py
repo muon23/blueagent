@@ -1,8 +1,8 @@
 import unittest
 from datetime import datetime, timezone
 
-from event.Event import EventFilter
-from event import PostUpsert, PostDelete
+from events.Event import EventFilter
+from events import PostUpsert, PostDelete
 from ingestors.PostIngestor import PostIngestor
 
 

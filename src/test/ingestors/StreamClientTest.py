@@ -5,7 +5,7 @@ import tempfile
 import unittest
 import urllib.parse
 
-from event.Event import Event
+from events.Event import Event
 from ingestors.Ingestor import Ingestor
 from ingestors.StreamClient import StreamClient
 from sinks.Sink import Sink

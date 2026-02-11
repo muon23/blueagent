@@ -26,12 +26,12 @@ DEFAULT_SINK_FLUSH_INTERVAL_S = 1.0
 DEFAULT_LANGS = ["en"]
 DEFAULT_LANGS_CSV = ",".join(DEFAULT_LANGS)
 
-# Adds anychat/src/main to sys.path for llms imports outside IntelliJ.
+# Adds cjutil/src/main to sys.path for llms/embeddings imports outside IntelliJ.
 import bootstrap  # noqa: F401
 
 from ingestors.PostIngestor import PostIngestor
 from ingestors.StreamClient import StreamClient
-from event.PostEventFilters import PostLanguageFilter
+from events.PostEventFilters import PostLanguageFilter
 from sinks.PostgresSink import PostgresSink
 
 

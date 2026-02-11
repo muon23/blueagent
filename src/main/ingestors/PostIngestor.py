@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import Dict, Any, List
 
-from event.Event import Event
-from event import PostUpsert, PostDelete
+from events.Event import Event
+from events import PostUpsert, PostDelete
 from .Ingestor import Ingestor
 
 

@@ -4,8 +4,8 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Iterable, Any
 
-from event.Event import Event
-from event import PostUpsert, PostDelete
+from events.Event import Event
+from events import PostUpsert, PostDelete
 from sinks.Sink import Sink
 
 

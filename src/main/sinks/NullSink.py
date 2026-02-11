@@ -1,4 +1,4 @@
-from event.Event import Event
+from events.Event import Event
 from sinks.Sink import Sink
 
 

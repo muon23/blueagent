@@ -1,6 +1,6 @@
 from typing import Callable, Awaitable, Dict, Type, Optional, cast, Iterable, TypeVar
 
-from event.Event import Event
+from events.Event import Event
 
 
 class Sink:
