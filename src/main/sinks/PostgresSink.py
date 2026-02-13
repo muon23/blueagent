@@ -31,6 +31,7 @@ class PostgresSink(Sink):
             self,
             dsn: str,
             *,
+            schema_name: str | None = None,
             table_name: str = "posts",
             batch_size: int = 1000,
             flush_interval_s: float = 1.0,
@@ -41,6 +42,7 @@ class PostgresSink(Sink):
 
         Args:
             dsn: PostgreSQL DSN.
+            schema_name: Optional PostgreSQL schema for the posts table.
             table_name: Target posts table name.
             batch_size: Maximum queued events before immediate flush.
             flush_interval_s: Time-based flush interval.
@@ -50,10 +52,13 @@ class PostgresSink(Sink):
             None.
 
         Raises:
-            ValueError: If table name is not a valid SQL identifier.
+            ValueError: If schema/table names are not valid SQL identifiers.
         """
         super().__init__()
         self._dsn = dsn
+        if schema_name is not None:
+            self._validate_identifier(schema_name, "schema_name")
+        self._schema_name = schema_name
         self._validate_identifier(table_name, "table_name")
         self._table_name = table_name
         self._batch_size = batch_size
@@ -204,7 +209,7 @@ class PostgresSink(Sink):
             )
 
         sql = f"""
-        INSERT INTO {self._table_name} (
+        INSERT INTO {self._qualified_table_name()} (
           uri, cid, did, created_at, text, reply_parent_uri, reply_root_uri, langs, tags, embed
         )
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
@@ -220,7 +225,7 @@ class PostgresSink(Sink):
           tags = EXCLUDED.tags,
           embed = EXCLUDED.embed,
           updated_at = NOW()
-        WHERE {self._table_name}.cid IS DISTINCT FROM EXCLUDED.cid;
+        WHERE {self._qualified_table_name()}.cid IS DISTINCT FROM EXCLUDED.cid;
         """
 
         async with self._pool.acquire() as conn:
@@ -236,7 +241,7 @@ class PostgresSink(Sink):
         self._pending_deletes = []
 
         uris = [(e.uri,) for e in batch]
-        sql = f"DELETE FROM {self._table_name} WHERE uri = $1;"
+        sql = f"DELETE FROM {self._qualified_table_name()} WHERE uri = $1;"
 
         async with self._pool.acquire() as conn:
             await conn.executemany(sql, uris)
@@ -250,8 +255,15 @@ class PostgresSink(Sink):
         idx_created = f"idx_{self._table_name}_created_at"
         idx_did = f"idx_{self._table_name}_did"
         idx_reply_root = f"idx_{self._table_name}_reply_root"
+        qualified_table = self._qualified_table_name()
+        create_schema_stmt = (
+            f"CREATE SCHEMA IF NOT EXISTS {self._schema_name};"
+            if self._schema_name is not None
+            else ""
+        )
         return f"""
-        CREATE TABLE IF NOT EXISTS {self._table_name} (
+        {create_schema_stmt}
+        CREATE TABLE IF NOT EXISTS {qualified_table} (
           uri TEXT PRIMARY KEY,
           cid TEXT NOT NULL,
           did TEXT NOT NULL,
@@ -266,8 +278,13 @@ class PostgresSink(Sink):
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
 
-        CREATE INDEX IF NOT EXISTS {idx_created} ON {self._table_name} (created_at DESC);
-        CREATE INDEX IF NOT EXISTS {idx_did} ON {self._table_name} (did);
-        CREATE INDEX IF NOT EXISTS {idx_reply_root} ON {self._table_name} (reply_root_uri);
+        CREATE INDEX IF NOT EXISTS {idx_created} ON {qualified_table} (created_at DESC);
+        CREATE INDEX IF NOT EXISTS {idx_did} ON {qualified_table} (did);
+        CREATE INDEX IF NOT EXISTS {idx_reply_root} ON {qualified_table} (reply_root_uri);
         """
+
+    def _qualified_table_name(self) -> str:
+        if self._schema_name is None:
+            return self._table_name
+        return f"{self._schema_name}.{self._table_name}"
 

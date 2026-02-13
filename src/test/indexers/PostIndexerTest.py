@@ -19,6 +19,9 @@ class FakeEmbedding(TextEmbedding):
     def get_model_name(self) -> str:
         return "fake"
 
+    def get_dimension(self) -> int:
+        return 1
+
     @classmethod
     def get_supported_models(cls) -> list[str]:
         return ["fake"]

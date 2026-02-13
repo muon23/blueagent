@@ -7,7 +7,8 @@ from pathlib import Path
 
 SRC_MAIN = Path(__file__).resolve().parents[1]
 if str(SRC_MAIN) not in sys.path:
-    sys.path.insert(0, str(SRC_MAIN))
+    # Keep stdlib precedence to avoid shadowing modules like `profile`.
+    sys.path.append(str(SRC_MAIN))
 
 from cli.bootstrap import PROJECT_ROOT
 from cli.config import DEFAULT_ENV, load_pipeline_config
@@ -41,9 +42,11 @@ def parse_args() -> argparse.Namespace:
 def _resolve_runtime_config(args: argparse.Namespace):
     pipeline_cfg = load_pipeline_config(PROJECT_ROOT, args.config, env=args.env)
     cfg = pipeline_cfg.ingest
+    db_cfg = pipeline_cfg.database
     minutes = args.minutes if args.minutes is not None else cfg.minutes
-    dsn = args.dsn or os.getenv("POSTGRES_DSN") or pipeline_cfg.database.dsn
-    posts_table = pipeline_cfg.database.posts_table
+    dsn = args.dsn or os.getenv("POSTGRES_DSN") or db_cfg.dsn
+    schema_name = db_cfg.schema_name
+    posts_table = db_cfg.posts_table
     cursor_file = args.cursor_file or cfg.cursor_file
     batch_size = args.batch_size if args.batch_size is not None else cfg.batch_size
     flush_interval_s = args.flush_interval_s if args.flush_interval_s is not None else cfg.flush_interval_s
@@ -57,6 +60,7 @@ def _resolve_runtime_config(args: argparse.Namespace):
     return (
         minutes,
         dsn,
+        schema_name,
         posts_table,
         cursor_file,
         batch_size,
@@ -68,7 +72,7 @@ def _resolve_runtime_config(args: argparse.Namespace):
 
 
 async def run_ingestion(args: argparse.Namespace) -> None:
-    minutes, dsn, posts_table, cursor_file, batch_size, flush_interval_s, sink_flush_interval_s, langs, create_schema = (
+    minutes, dsn, schema_name, posts_table, cursor_file, batch_size, flush_interval_s, sink_flush_interval_s, langs, create_schema = (
         _resolve_runtime_config(args)
     )
 
@@ -77,6 +81,7 @@ async def run_ingestion(args: argparse.Namespace) -> None:
 
     sink = PostgresSink(
         dsn=dsn,
+        schema_name=schema_name,
         table_name=posts_table,
         batch_size=batch_size,
         flush_interval_s=flush_interval_s,
@@ -90,6 +95,7 @@ async def run_ingestion(args: argparse.Namespace) -> None:
     )
 
     print(f"Starting ingestion for {minutes} minute(s).")
+    print(f"Schema: {schema_name or '(default search_path)'}")
     print(f"Posts table: {posts_table}")
     print(f"Language filter: {langs}")
     print(f"Cursor file: {cursor_path}")

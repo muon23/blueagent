@@ -29,9 +29,7 @@ class IndexConfig:
     model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     lookback_days: int = 3
     batch_size: int = 500
-    vector_table: str = "post_embeddings"
-    vector_dimension: int = 384
-    vector_schema: str | None = None
+    cursor_file: str = "data/index_posts_cursor.txt"
     vector_distance: str = "cosine"
     create_vector_if_not_exist: bool = True
 
@@ -46,7 +44,9 @@ class PipelineConfig:
 @dataclass
 class DatabaseConfig:
     dsn: str = "postgresql://localhost/postgres"
+    schema_name: str | None = None
     posts_table: str = "posts"
+    vector_table: str = "post_embeddings"
 
 
 def _merge_dataclass_defaults(dc_cls, values: dict[str, Any] | None):
@@ -88,5 +88,7 @@ def load_pipeline_config(
 
     if not Path(ingest_cfg.cursor_file).is_absolute():
         ingest_cfg.cursor_file = str(project_root / ingest_cfg.cursor_file)
+    if not Path(index_cfg.cursor_file).is_absolute():
+        index_cfg.cursor_file = str(project_root / index_cfg.cursor_file)
 
     return PipelineConfig(database=db_cfg, ingest=ingest_cfg, index=index_cfg)
