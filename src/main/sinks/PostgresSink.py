@@ -1,10 +1,13 @@
 import json
+import re
 import time
 from typing import List, Iterable, Tuple, Any
 
 from events.Event import Event
 from events import PostUpsert, PostDelete
 from sinks.Sink import Sink
+
+_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class PostgresSink(Sink):
@@ -18,6 +21,7 @@ class PostgresSink(Sink):
     - PostUpsert: upserts on posts.uri
       * updates row if cid differs (still updates to latest text/fields)
     - PostDelete: deletes by uri
+    - Preserves cross-type ordering by flushing the opposite queue before enqueue.
 
     You can tune:
     - batch_size: max rows per DB roundtrip
@@ -27,12 +31,31 @@ class PostgresSink(Sink):
             self,
             dsn: str,
             *,
+            table_name: str = "posts",
             batch_size: int = 1000,
             flush_interval_s: float = 1.0,
             create_schema: bool = True,
     ) -> None:
+        """
+        Initialize PostgreSQL sink.
+
+        Args:
+            dsn: PostgreSQL DSN.
+            table_name: Target posts table name.
+            batch_size: Maximum queued events before immediate flush.
+            flush_interval_s: Time-based flush interval.
+            create_schema: Whether to create table/indexes when opening.
+
+        Returns:
+            None.
+
+        Raises:
+            ValueError: If table name is not a valid SQL identifier.
+        """
         super().__init__()
         self._dsn = dsn
+        self._validate_identifier(table_name, "table_name")
+        self._table_name = table_name
         self._batch_size = batch_size
         self._flush_interval_s = flush_interval_s
         self._create_schema = create_schema
@@ -46,6 +69,18 @@ class PostgresSink(Sink):
         self.on(PostDelete, self._enqueue_post_delete)
 
     async def open(self) -> None:
+        """
+        Open connection pool and optionally create schema objects.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+
+        Raises:
+            Exception: Propagates asyncpg connection/DDL failures.
+        """
         import asyncpg  # local import to keep optional dependency clean
 
         if self._pool is not None:
@@ -54,14 +89,18 @@ class PostgresSink(Sink):
 
         if self._create_schema:
             async with self._pool.acquire() as conn:
-                await conn.execute(self._POST_SCHEMA_SQL)
+                await conn.execute(self._post_schema_sql())
 
     async def _enqueue_post_upsert(self, e: PostUpsert) -> None:
+        if self._pending_deletes:
+            await self._flush_deletes()
         self._pending_upserts.append(e)
         if len(self._pending_upserts) >= self._batch_size:
             await self._flush_upserts()
 
     async def _enqueue_post_delete(self, e: PostDelete) -> None:
+        if self._pending_upserts:
+            await self._flush_upserts()
         self._pending_deletes.append(e)
         if len(self._pending_deletes) >= self._batch_size:
             await self._flush_deletes()
@@ -69,18 +108,51 @@ class PostgresSink(Sink):
     async def tick(self) -> None:
         """
         Call periodically (e.g., in your main loop) to flush on time intervals.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+
+        Raises:
+            Exception: Propagates flush failures.
         """
         now = time.monotonic()
         if now - self._last_flush >= self._flush_interval_s:
             await self.flush()
 
     async def write(self, events: Iterable[Event]) -> None:
+        """
+        Write event batch into sink queues (and flush by size thresholds).
+
+        Args:
+            events: Events to enqueue.
+
+        Returns:
+            None.
+
+        Raises:
+            Exception: Propagates pool open, handler, and flush errors.
+        """
         if self._pool is None:
             await self.open()
         await super().write(events)
         # optional: time-based flush is handled by tick()/flush() called by runner
 
     async def flush(self) -> None:
+        """
+        Flush both upsert and delete queues.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+
+        Raises:
+            Exception: Propagates database write errors.
+        """
         if self._pool is None:
             return
         await self._flush_upserts()
@@ -88,6 +160,18 @@ class PostgresSink(Sink):
         self._last_flush = time.monotonic()
 
     async def close(self) -> None:
+        """
+        Flush pending events and close the connection pool.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+
+        Raises:
+            Exception: Propagates flush/close errors.
+        """
         await self.flush()
         if self._pool is not None:
             await self._pool.close()
@@ -119,8 +203,8 @@ class PostgresSink(Sink):
                 )
             )
 
-        sql = """
-        INSERT INTO posts (
+        sql = f"""
+        INSERT INTO {self._table_name} (
           uri, cid, did, created_at, text, reply_parent_uri, reply_root_uri, langs, tags, embed
         )
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
@@ -136,7 +220,7 @@ class PostgresSink(Sink):
           tags = EXCLUDED.tags,
           embed = EXCLUDED.embed,
           updated_at = NOW()
-        WHERE posts.cid IS DISTINCT FROM EXCLUDED.cid;
+        WHERE {self._table_name}.cid IS DISTINCT FROM EXCLUDED.cid;
         """
 
         async with self._pool.acquire() as conn:
@@ -152,29 +236,38 @@ class PostgresSink(Sink):
         self._pending_deletes = []
 
         uris = [(e.uri,) for e in batch]
-        sql = "DELETE FROM posts WHERE uri = $1;"
+        sql = f"DELETE FROM {self._table_name} WHERE uri = $1;"
 
         async with self._pool.acquire() as conn:
             await conn.executemany(sql, uris)
 
-    _POST_SCHEMA_SQL = """
-    CREATE TABLE IF NOT EXISTS posts (
-      uri TEXT PRIMARY KEY,
-      cid TEXT NOT NULL,
-      did TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL,
-      text TEXT NOT NULL,
-      reply_parent_uri TEXT NULL,
-      reply_root_uri TEXT NULL,
-      langs TEXT[] NULL,
-      tags TEXT[] NULL,
-      embed JSONB NULL,
-      inserted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
+    @staticmethod
+    def _validate_identifier(identifier: str, name: str) -> None:
+        if not _IDENTIFIER.match(identifier):
+            raise ValueError(f"Invalid SQL identifier for {name}: {identifier}")
 
-    CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts (created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_posts_did ON posts (did);
-    CREATE INDEX IF NOT EXISTS idx_posts_reply_root ON posts (reply_root_uri);
-    """
+    def _post_schema_sql(self) -> str:
+        idx_created = f"idx_{self._table_name}_created_at"
+        idx_did = f"idx_{self._table_name}_did"
+        idx_reply_root = f"idx_{self._table_name}_reply_root"
+        return f"""
+        CREATE TABLE IF NOT EXISTS {self._table_name} (
+          uri TEXT PRIMARY KEY,
+          cid TEXT NOT NULL,
+          did TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL,
+          text TEXT NOT NULL,
+          reply_parent_uri TEXT NULL,
+          reply_root_uri TEXT NULL,
+          langs TEXT[] NULL,
+          tags TEXT[] NULL,
+          embed JSONB NULL,
+          inserted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS {idx_created} ON {self._table_name} (created_at DESC);
+        CREATE INDEX IF NOT EXISTS {idx_did} ON {self._table_name} (did);
+        CREATE INDEX IF NOT EXISTS {idx_reply_root} ON {self._table_name} (reply_root_uri);
+        """
 

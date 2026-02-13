@@ -31,6 +31,25 @@ class FailingSink(Sink):
         raise RuntimeError("boom")
 
 
+class QueueAwarePostgresSink(PostgresSink):
+    def __init__(self):
+        super().__init__("postgresql://unused", create_schema=False, batch_size=1000)
+        self.flush_upserts_calls = 0
+        self.flush_deletes_calls = 0
+
+    async def _flush_upserts(self) -> None:
+        if not self._pending_upserts:
+            return
+        self.flush_upserts_calls += 1
+        self._pending_upserts = []
+
+    async def _flush_deletes(self) -> None:
+        if not self._pending_deletes:
+            return
+        self.flush_deletes_calls += 1
+        self._pending_deletes = []
+
+
 class SinkTest(unittest.IsolatedAsyncioTestCase):
     async def test_null_sink_accepts_event(self):
         sink = NullSink()
@@ -82,15 +101,38 @@ class SinkTest(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(RuntimeError):
             await sink.write([Event(cursor="c2")])
 
+    async def test_postgres_sink_flushes_upserts_before_enqueue_delete(self):
+        sink = QueueAwarePostgresSink()
+        upsert = PostUpsert(uri="at://did/app.bsky.feed.post/abc", cid="cid1", did="did:plc:xyz")
+        delete = PostDelete(uri="at://did/app.bsky.feed.post/abc")
+
+        await sink._enqueue_post_upsert(upsert)
+        self.assertEqual(1, len(sink._pending_upserts))
+        self.assertEqual(0, len(sink._pending_deletes))
+
+        await sink._enqueue_post_delete(delete)
+        self.assertEqual(1, sink.flush_upserts_calls)
+        self.assertEqual(0, len(sink._pending_upserts))
+        self.assertEqual(1, len(sink._pending_deletes))
+
+    async def test_postgres_sink_flushes_deletes_before_enqueue_upsert(self):
+        sink = QueueAwarePostgresSink()
+        upsert = PostUpsert(uri="at://did/app.bsky.feed.post/abc", cid="cid1", did="did:plc:xyz")
+        delete = PostDelete(uri="at://did/app.bsky.feed.post/abc")
+
+        await sink._enqueue_post_delete(delete)
+        self.assertEqual(1, len(sink._pending_deletes))
+        self.assertEqual(0, len(sink._pending_upserts))
+
+        await sink._enqueue_post_upsert(upsert)
+        self.assertEqual(1, sink.flush_deletes_calls)
+        self.assertEqual(0, len(sink._pending_deletes))
+        self.assertEqual(1, len(sink._pending_upserts))
+
     async def test_postgres_sink_upsert_and_delete(self):
         dsn = os.getenv("POSTGRES_DSN") or os.getenv("DATABASE_URL")
         if not dsn:
             self.skipTest("Set POSTGRES_DSN to run PostgresSink test")
-
-        # try:
-        #     import asyncpg  # type: ignore
-        # except Exception:
-        #     self.skipTest("asyncpg not installed")
 
         schema = f"sink_test_{uuid.uuid4().hex}"
         dsn_with_schema = self._with_search_path(dsn, schema)

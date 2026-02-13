@@ -14,11 +14,36 @@ class MultiSink(Sink):
     This class does not register handlers; it simply forwards write/flush/close.
     """
     def __init__(self, critical: Sequence[Sink], optional: Sequence[Sink] = ()) -> None:
+        """
+        Initialize fan-out sink with critical and optional delegates.
+
+        Args:
+            critical: Sinks that must succeed.
+            optional: Sinks that are best-effort.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
         super().__init__()
         self.critical = list(critical)
         self.optional = list(optional)
 
     async def write(self, events: Iterable[Event]) -> None:
+        """
+        Forward one event batch to all configured sinks.
+
+        Args:
+            events: Events to write.
+
+        Returns:
+            None.
+
+        Raises:
+            Exception: Propagates failures from critical sinks.
+        """
         batch = list(events)  # materialize once
         # critical sinks must succeed
         for s in self.critical:
@@ -31,6 +56,18 @@ class MultiSink(Sink):
                 print(f"[MultiSink] optional sink {s.__class__.__name__} failed: {e}", file=sys.stderr)
 
     async def flush(self) -> None:
+        """
+        Flush all sinks, enforcing critical sink success.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+
+        Raises:
+            Exception: Propagates failures from critical sinks.
+        """
         for s in self.critical:
             await s.flush()
         for s in self.optional:
@@ -40,6 +77,18 @@ class MultiSink(Sink):
                 print(f"[MultiSink] optional sink {s.__class__.__name__} flush failed: {e}", file=sys.stderr)
 
     async def close(self) -> None:
+        """
+        Close all sinks, enforcing critical sink success.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+
+        Raises:
+            Exception: Propagates failures from critical sinks.
+        """
         for s in self.critical:
             await s.close()
         for s in self.optional:

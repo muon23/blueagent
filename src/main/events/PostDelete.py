@@ -6,10 +6,25 @@ from .Event import Event
 
 @dataclass(frozen=True)
 class PostDelete(Event):
+    """Domain event for deletion of a Bluesky post record."""
+
     uri: str = ""
 
     @classmethod
     def from_event(cls, evt: Dict[str, Any]) -> Optional["PostDelete"]:
+        """
+        Build a `PostDelete` event from a Jetstream event payload.
+
+        Args:
+            evt: JSON-decoded Jetstream event dictionary.
+
+        Returns:
+            A `PostDelete` event when the payload represents a post deletion;
+            otherwise `None`.
+
+        Raises:
+            None.
+        """
         if evt.get("kind") != "commit":
             return None
 

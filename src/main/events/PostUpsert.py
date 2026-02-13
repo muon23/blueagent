@@ -7,6 +7,13 @@ from .Event import Event
 
 @dataclass(frozen=True)
 class PostUpsert(Event):
+    """
+    Domain event for creating/updating a Bluesky post record.
+
+    This event stores normalized post content and selected metadata used by
+    ingestion, storage, and indexing.
+    """
+
     uri: str = ""
     cid: str = ""
     did: str = ""
@@ -22,6 +29,19 @@ class PostUpsert(Event):
 
     @classmethod
     def from_event(cls, evt: Dict[str, Any]) -> Optional["PostUpsert"]:
+        """
+        Build a `PostUpsert` event from a Jetstream event payload.
+
+        Args:
+            evt: JSON-decoded Jetstream event dictionary.
+
+        Returns:
+            A populated `PostUpsert` when the payload represents a post create or
+            update event; otherwise `None`.
+
+        Raises:
+            None.
+        """
         if evt.get("kind") != "commit":
             return None
 
@@ -81,6 +101,18 @@ class PostUpsert(Event):
 
     @staticmethod
     def _parse_created_at(value: Any) -> Optional[datetime]:
+        """
+        Parse Bluesky `createdAt` value into timezone-aware datetime.
+
+        Args:
+            value: Raw `createdAt` field value.
+
+        Returns:
+            Parsed datetime when valid; otherwise `None`.
+
+        Raises:
+            None.
+        """
         if not value or not isinstance(value, str):
             return None
         try:
@@ -92,6 +124,18 @@ class PostUpsert(Event):
 
     @staticmethod
     def _extract_tags(record: Dict[str, Any]) -> Optional[List[str]]:
+        """
+        Extract hashtag-like tags from post facets.
+
+        Args:
+            record: Bluesky post record dictionary.
+
+        Returns:
+            Unique tag list preserving first-seen order, or `None` when absent.
+
+        Raises:
+            None.
+        """
         facets = record.get("facets")
         if not isinstance(facets, list):
             return None
@@ -118,6 +162,18 @@ class PostUpsert(Event):
 
     @staticmethod
     def _extract_embed(embed: Any) -> Optional[dict[str, Any]]:
+        """
+        Normalize embed payload into a compact metadata dictionary.
+
+        Args:
+            embed: Raw `record["embed"]` payload.
+
+        Returns:
+            Normalized embed dictionary or `None` when unsupported/empty.
+
+        Raises:
+            None.
+        """
         if not isinstance(embed, dict):
             return None
 

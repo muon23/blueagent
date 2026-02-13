@@ -18,6 +18,19 @@ class PostIngestor(Ingestor):
     """
 
     async def handle_event(self, evt: Dict[str, Any]) -> List[Event]:
+        """
+        Parse one stream payload into post events.
+
+        Args:
+            evt: Jetstream event dictionary.
+
+        Returns:
+            Zero or more post events (`PostDelete` or `PostUpsert`) after
+            applying configured filters.
+
+        Raises:
+            None.
+        """
         delete_event = PostDelete.from_event(evt)
         if delete_event is not None:
             return self._apply_filters([delete_event])
@@ -29,5 +42,17 @@ class PostIngestor(Ingestor):
         return []
 
     def wanted_collections(self) -> List[str]:
+        """
+        Return the post collection route for stream subscription.
+
+        Args:
+            None.
+
+        Returns:
+            List containing only `app.bsky.feed.post`.
+
+        Raises:
+            None.
+        """
         return ["app.bsky.feed.post"]
 

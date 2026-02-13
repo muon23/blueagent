@@ -6,6 +6,18 @@ class NullSink(Sink):
     """No-op sink for tests / dry runs."""
 
     def __init__(self) -> None:
+        """
+        Register a base `Event` no-op handler.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
         super().__init__()
 
         # Register a default handler for all Event types via base class

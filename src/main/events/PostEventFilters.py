@@ -10,10 +10,24 @@ from .PostUpsert import PostUpsert
 
 @dataclass
 class PostTimeFrameFilter(EventFilter):
+    """Filter post upserts by created-at time range."""
+
     start: Optional[datetime] = None
     end: Optional[datetime] = None
 
     def apply(self, events: List[Event]) -> List[Event]:
+        """
+        Keep post upserts within `[start, end]` bounds.
+
+        Args:
+            events: Input events to evaluate.
+
+        Returns:
+            Filtered event list where non-post events always pass through.
+
+        Raises:
+            None.
+        """
         if self.start is None and self.end is None:
             return events
 
@@ -34,12 +48,38 @@ class PostTimeFrameFilter(EventFilter):
 
 @dataclass
 class PostLanguageFilter(EventFilter):
+    """Filter post upserts by language intersection."""
+
     langs: List[str]
 
     def __post_init__(self) -> None:
+        """
+        Normalize configured language set for case-insensitive matching.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
         self._lang_set = {l.lower() for l in self.langs}
 
     def apply(self, events: List[Event]) -> List[Event]:
+        """
+        Keep post upserts that contain at least one configured language.
+
+        Args:
+            events: Input events to evaluate.
+
+        Returns:
+            Filtered event list where non-post events always pass through.
+
+        Raises:
+            None.
+        """
         if not self._lang_set:
             return events
 
@@ -60,7 +100,21 @@ class PostLanguageFilter(EventFilter):
 
 @dataclass
 class PostOriginalOnlyFilter(EventFilter):
+    """Filter post upserts to original posts (exclude replies)."""
+
     def apply(self, events: List[Event]) -> List[Event]:
+        """
+        Keep only non-reply post upserts.
+
+        Args:
+            events: Input events to evaluate.
+
+        Returns:
+            Filtered event list where non-post events always pass through.
+
+        Raises:
+            None.
+        """
         filtered: List[Event] = []
         for ev in events:
             if not isinstance(ev, PostUpsert):

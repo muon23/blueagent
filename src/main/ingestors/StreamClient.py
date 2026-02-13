@@ -25,6 +25,8 @@ JETSTREAM_INSTANCES = [
 
 
 class StreamClient:
+    """Jetstream client that routes raw stream events to ingestors and sinks."""
+
     def __init__(
         self,
         ingestors: List[Ingestor],
@@ -34,6 +36,23 @@ class StreamClient:
         rewind_seconds: int = 3,
         sink_flush_interval_s: float = 1.0,
     ):
+        """
+        Initialize a stream client with routing, cursor persistence, and sink.
+
+        Args:
+            ingestors: Ingestor instances used to parse routed stream events.
+            sink: Optional sink to persist emitted domain events.
+            instances: Optional Jetstream websocket endpoints.
+            cursor_file: Optional path to cursor persistence file.
+            rewind_seconds: Cursor rewind on reconnect to reduce gap risk.
+            sink_flush_interval_s: Periodic sink flush interval in seconds.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
         self.ingestors = ingestors
         self.sink = sink or NullSink()
         self.routes = set().union(*(i.wanted_collections() for i in ingestors))
@@ -52,7 +71,18 @@ class StreamClient:
         self.ssl_context = ssl.create_default_context(cafile=certifi.where())
 
     def load_cursor_us(self) -> Optional[int]:
-        """Load last cursor (unix microseconds) from disk."""
+        """
+        Load last persisted cursor in microseconds.
+
+        Args:
+            None.
+
+        Returns:
+            Cursor value or `None` when unavailable.
+
+        Raises:
+            None.
+        """
         if not os.path.exists(self.cursor_file):
             return None
         try:
@@ -63,7 +93,18 @@ class StreamClient:
             return None
 
     def save_cursor_us(self, cursor_us: int) -> None:
-        """Persist cursor to disk (atomic-ish)."""
+        """
+        Persist cursor to disk using replace semantics.
+
+        Args:
+            cursor_us: Cursor value in unix microseconds.
+
+        Returns:
+            None.
+
+        Raises:
+            OSError: Propagates filesystem write/replace errors.
+        """
         tmp = self.cursor_file + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             f.write(str(cursor_us))
@@ -71,9 +112,17 @@ class StreamClient:
 
     def build_url(self, base: str, cursor_us: Optional[int]) -> str:
         """
-        Jetstream supports query params including:
-          - wantedCollections (repeatable)
-          - cursor (unix microseconds) to begin playback from
+        Build Jetstream subscribe URL with collection and cursor parameters.
+
+        Args:
+            base: Base websocket URL for Jetstream subscribe endpoint.
+            cursor_us: Optional replay cursor in unix microseconds.
+
+        Returns:
+            Fully-qualified websocket URL with query parameters.
+
+        Raises:
+            None.
         """
         params = []
         for collection in sorted(self.routes):
@@ -85,10 +134,34 @@ class StreamClient:
 
     @staticmethod
     def now_us() -> int:
+        """
+        Return current unix time in microseconds.
+
+        Args:
+            None.
+
+        Returns:
+            Current unix time in microseconds.
+
+        Raises:
+            None.
+        """
         return int(time.time() * 1_000_000)
 
     @classmethod
     def _extract_collection(cls, evt: Dict[str, Any]) -> Optional[str]:
+        """
+        Extract collection NSID from a commit event.
+
+        Args:
+            evt: Raw Jetstream event dictionary.
+
+        Returns:
+            Collection NSID when event is a commit; otherwise `None`.
+
+        Raises:
+            None.
+        """
         kind = evt.get("kind")
         if kind != "commit":
             return None
@@ -96,6 +169,19 @@ class StreamClient:
         return commit.get("collection")
 
     async def _fanout(self, evt: Dict[str, Any], collection: Optional[str]) -> List[Event]:
+        """
+        Route one event to matching ingestors and collect emitted events.
+
+        Args:
+            evt: Raw Jetstream event dictionary.
+            collection: Extracted collection NSID.
+
+        Returns:
+            Concatenated list of emitted domain events.
+
+        Raises:
+            Exception: Propagates ingestor handling errors.
+        """
         if collection is None:
             return []
         out: List[Event] = []
@@ -106,12 +192,36 @@ class StreamClient:
         return out
 
     async def _maybe_flush_sink(self, force: bool = False) -> None:
+        """
+        Flush sink if forced or flush interval has elapsed.
+
+        Args:
+            force: Whether to flush regardless of elapsed time.
+
+        Returns:
+            None.
+
+        Raises:
+            Exception: Propagates sink flush errors.
+        """
         now = time.monotonic()
         if force or now - self._last_sink_flush_at >= self.sink_flush_interval_s:
             await self.sink.flush()
             self._last_sink_flush_at = now
 
     async def run_forever(self):
+        """
+        Connect to Jetstream, consume events, and persist sink/cursor continuously.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+
+        Raises:
+            asyncio.CancelledError: When caller cancels the running task.
+        """
         cursor = self.load_cursor_us()
         if cursor is None:
             cursor = self.now_us()
