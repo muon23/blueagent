@@ -17,6 +17,7 @@ class IngestConfig:
     flush_interval_s: float = 1.0
     sink_flush_interval_s: float = 1.0
     langs: list[str] = None
+    original_only: bool = False
     create_schema: bool = True
 
     def __post_init__(self) -> None:

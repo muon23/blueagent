@@ -12,7 +12,7 @@ if str(SRC_MAIN) not in sys.path:
 
 from cli.bootstrap import PROJECT_ROOT
 from cli.config import DEFAULT_ENV, load_pipeline_config
-from events.PostEventFilters import PostLanguageFilter
+from events.PostEventFilters import PostLanguageFilter, PostOriginalOnlyFilter
 from ingestors.PostIngestor import PostIngestor
 from ingestors.StreamClient import StreamClient
 from sinks.PostgresSink import PostgresSink
@@ -35,6 +35,12 @@ def parse_args() -> argparse.Namespace:
         "--sink-flush-interval-s", type=float, default=None, help="Override StreamClient sink flush interval."
     )
     parser.add_argument("--langs", default=None, help="Override comma-separated language filters.")
+    parser.add_argument(
+        "--original-only",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Whether to ingest only original posts (exclude replies).",
+    )
     parser.add_argument("--no-create-schema", action="store_true", help="Disable posts schema auto-create.")
     return parser.parse_args()
 
@@ -56,6 +62,7 @@ def _resolve_runtime_config(args: argparse.Namespace):
     langs = [lang.strip().lower() for lang in (args.langs.split(",") if args.langs else cfg.langs) if lang.strip()]
     if not langs:
         langs = ["en"]
+    original_only = cfg.original_only if args.original_only is None else args.original_only
     create_schema = False if args.no_create_schema else cfg.create_schema
     return (
         minutes,
@@ -67,17 +74,22 @@ def _resolve_runtime_config(args: argparse.Namespace):
         flush_interval_s,
         sink_flush_interval_s,
         langs,
+        original_only,
         create_schema,
     )
 
 
 async def run_ingestion(args: argparse.Namespace) -> None:
-    minutes, dsn, schema_name, posts_table, cursor_file, batch_size, flush_interval_s, sink_flush_interval_s, langs, create_schema = (
+    minutes, dsn, schema_name, posts_table, cursor_file, batch_size, flush_interval_s, sink_flush_interval_s, langs, original_only, create_schema = (
         _resolve_runtime_config(args)
     )
 
     cursor_path = Path(cursor_file)
     cursor_path.parent.mkdir(parents=True, exist_ok=True)
+
+    filters = [PostLanguageFilter(langs=langs)]
+    if original_only:
+        filters.append(PostOriginalOnlyFilter())
 
     sink = PostgresSink(
         dsn=dsn,
@@ -88,7 +100,7 @@ async def run_ingestion(args: argparse.Namespace) -> None:
         create_schema=create_schema,
     )
     client = StreamClient(
-        [PostIngestor(filters=[PostLanguageFilter(langs=langs)])],
+        [PostIngestor(filters=filters)],
         sink=sink,
         cursor_file=str(cursor_path),
         sink_flush_interval_s=sink_flush_interval_s,
@@ -98,6 +110,7 @@ async def run_ingestion(args: argparse.Namespace) -> None:
     print(f"Schema: {schema_name or '(default search_path)'}")
     print(f"Posts table: {posts_table}")
     print(f"Language filter: {langs}")
+    print(f"Original posts only: {original_only}")
     print(f"Cursor file: {cursor_path}")
     print("Press Ctrl+C to stop early.")
 

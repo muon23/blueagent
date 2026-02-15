@@ -6,10 +6,9 @@
     - `uri` (PK, FK to posts)
     - `embedding` (vector)
     - `updated_at`
-2. **Ingestion → Postgres**
+2. **Ingestion → Postgres** (done)
   - Ingest posts into `posts`.
-    - ToDo: Main program 
-3. **Batch indexers**
+3. **Batch indexers** (done)
   - Periodically pull recent posts (e.g., last 2–3 days) and compute embeddings.
   - Upsert into `post_embeddings`.
 

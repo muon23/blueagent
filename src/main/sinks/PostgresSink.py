@@ -193,18 +193,19 @@ class PostgresSink(Sink):
         # Prepare rows
         rows: List[Tuple[Any, ...]] = []
         for e in batch:
+            sanitized_embed = self._sanitize_json_payload(e.embed)
             rows.append(
                 (
-                    e.uri,
-                    e.cid,
-                    e.did,
+                    self._sanitize_text(e.uri),
+                    self._sanitize_text(e.cid),
+                    self._sanitize_text(e.did),
                     e.created_at,
-                    e.text,
-                    e.reply_parent_uri,
-                    e.reply_root_uri,
-                    e.langs,
-                    e.tags,
-                    json.dumps(e.embed, ensure_ascii=False) if e.embed is not None else None,
+                    self._sanitize_text(e.text),
+                    self._sanitize_optional_text(e.reply_parent_uri),
+                    self._sanitize_optional_text(e.reply_root_uri),
+                    self._sanitize_optional_text_list(e.langs),
+                    self._sanitize_optional_text_list(e.tags),
+                    json.dumps(sanitized_embed, ensure_ascii=False) if sanitized_embed is not None else None,
                 )
             )
 
@@ -240,7 +241,7 @@ class PostgresSink(Sink):
         batch = self._pending_deletes
         self._pending_deletes = []
 
-        uris = [(e.uri,) for e in batch]
+        uris = [(self._sanitize_text(e.uri),) for e in batch]
         sql = f"DELETE FROM {self._qualified_table_name()} WHERE uri = $1;"
 
         async with self._pool.acquire() as conn:
@@ -287,4 +288,33 @@ class PostgresSink(Sink):
         if self._schema_name is None:
             return self._table_name
         return f"{self._schema_name}.{self._table_name}"
+
+    @staticmethod
+    def _sanitize_text(value: str) -> str:
+        # PostgreSQL TEXT/JSONB rejects NUL bytes.
+        return value.replace("\x00", "")
+
+    @classmethod
+    def _sanitize_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return cls._sanitize_text(value)
+
+    @classmethod
+    def _sanitize_optional_text_list(cls, values: list[str] | None) -> list[str] | None:
+        if values is None:
+            return None
+        return [cls._sanitize_text(v) for v in values]
+
+    @classmethod
+    def _sanitize_json_payload(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return cls._sanitize_text(value)
+        if isinstance(value, list):
+            return [cls._sanitize_json_payload(v) for v in value]
+        if isinstance(value, dict):
+            return {k: cls._sanitize_json_payload(v) for k, v in value.items()}
+        return value
 

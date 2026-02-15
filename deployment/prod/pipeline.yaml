@@ -1,0 +1,23 @@
+database:
+  dsn: postgresql://localhost/postgres
+  schema_name: null
+  posts_table: posts
+  vector_table: post_embeddings
+
+ingest:
+  minutes: 5.0
+  cursor_file: data/jetstream_cursor.txt
+  batch_size: 1000
+  flush_interval_s: 1.0
+  sink_flush_interval_s: 1.0
+  langs: [en]
+  original_only: false
+  create_schema: true
+
+index:
+  model_name: sentence-transformers/all-MiniLM-L6-v2
+  lookback_days: 3
+  batch_size: 1000
+  cursor_file: data/index_posts_cursor.txt
+  vector_distance: cosine
+  create_vector_if_not_exist: true
